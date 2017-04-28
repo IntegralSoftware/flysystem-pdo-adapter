@@ -46,6 +46,23 @@ CREATE TABLE files (
 )
 ```
 
+**PostgreSQL**
+```sql
+CREATE TABLE public.files (
+  id serial NOT NULL,
+  path varchar(255) NOT NULL,
+  type varchar(4) NOT NULL,
+  contents bytea,
+  size integer NOT NULL DEFAULT 0,
+  mimetype varchar(127),
+  "timestamp" integer NOT NULL DEFAULT 0,
+  is_compressed boolean NOT NULL DEFAULT true,
+  update_ts timestamp(0) with time zone DEFAULT NOW(),
+  CONSTRAINT files_pkey PRIMARY KEY (id),
+  CONSTRAINT type_check CHECK (type='dir' or type='file'),
+  CONSTRAINT path_unique UNIQUE (path)
+);
+```
 
 ## Usage
 
@@ -63,6 +80,13 @@ $adapter = new PDOAdapter($pdo, 'files');
 // http://php.net/manual/pl/ref.pdo-sqlite.connection.php
 $pdo = new PDO('sqlite:/absolute/path/to/database.sqlite');
 $adapter = new PDOAdapter($pdo, 'files');
+```
+
+**PostgreSQL**
+```php
+// http://php.net/manual/pl/ref.pdo-pgsql.php
+$pdo = new PDO('pgsql:host=localhost;port=5432;dbname=testdb;user=bruce;password=mypass');
+$adapter = new PDOAdapter($pdo, 'public.files');
 ```
 
 Then simply pass the created adapter to `\League\Flysystem\Filesystem`:

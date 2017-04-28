@@ -35,7 +35,7 @@ class PDOAdapter implements AdapterInterface
     {
         $this->pdo = $pdo;
 
-        if (!preg_match('/^[a-zA-Z_][a-zA-Z0-9_]*$/', $tableName)) {
+        if (!preg_match('/^[a-zA-Z_][a-zA-Z0-9_.]*$/', $tableName)) {
             throw new \InvalidArgumentException('Invalid table name');
         }
 
