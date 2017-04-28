@@ -16,7 +16,7 @@ composer require integral/flysystem-pdo-adapter
 
 At the beginning you have to create a table that will be used to store files.
 
-SQL table schema examples for MySQL and SQLite are presented below.
+SQL table schema examples for MySQL, SQLite and PostgreSQL are presented below.
 
 **MySQL**
 ```sql
