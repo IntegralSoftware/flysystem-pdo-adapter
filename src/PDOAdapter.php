@@ -77,17 +77,19 @@ class PDOAdapter implements AdapterInterface
      */
     public function update($path, $contents, Config $config)
     {
-        $statement = $this->pdo->prepare("UPDATE {$this->table} SET contents=:newcontents, mimetype=:mimetype, size=:size WHERE path=:path");
+        $statement = $this->pdo->prepare("UPDATE {$this->table} SET contents=:newcontents, mimetype=:mimetype, size=:size, timestamp=:timestamp WHERE path=:path");
 
         $size = strlen($contents);
         $mimetype = Util::guessMimeType($path, $contents);
+        $timestamp = time();
 
         $statement->bindParam(':size', $size, PDO::PARAM_INT);
         $statement->bindParam(':mimetype', $mimetype, PDO::PARAM_STR);
         $statement->bindParam(':newcontents', $contents, PDO::PARAM_LOB);
         $statement->bindParam(':path', $path, PDO::PARAM_STR);
+        $statement->bindParam(':timestamp', $timestamp, PDO::PARAM_INT);
 
-        return $statement->execute() ? compact('path', 'contents', 'size', 'mimetype') : false;
+        return $statement->execute() ? compact('path', 'contents', 'size', 'mimetype', 'timestamp') : false;
     }
 
     /**
