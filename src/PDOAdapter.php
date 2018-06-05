@@ -52,7 +52,7 @@ class PDOAdapter implements AdapterInterface
         $size = strlen($contents);
         $type = 'file';
         $mimetype = Util::guessMimeType($path, $contents);
-        $timestamp = time();
+        $timestamp = $config->get('timestamp', time());
 
         $statement->bindParam(':path', $path, PDO::PARAM_STR);
         $statement->bindParam(':contents', $contents, PDO::PARAM_LOB);
@@ -81,7 +81,7 @@ class PDOAdapter implements AdapterInterface
 
         $size = strlen($contents);
         $mimetype = Util::guessMimeType($path, $contents);
-        $timestamp = time();
+        $timestamp = $config->get('timestamp', time());
 
         $statement->bindParam(':size', $size, PDO::PARAM_INT);
         $statement->bindParam(':mimetype', $mimetype, PDO::PARAM_STR);
@@ -211,9 +211,11 @@ class PDOAdapter implements AdapterInterface
     {
         $statement = $this->pdo->prepare("INSERT INTO {$this->table} (path, type, timestamp) VALUES(:path, :type, :timestamp)");
 
+        $timestamp = $config->get('timestamp', time());
+
         $statement->bindParam(':path', $dirname, PDO::PARAM_STR);
         $statement->bindValue(':type', 'dir', PDO::PARAM_STR);
-        $statement->bindValue(':timestamp', time(), PDO::PARAM_STR);
+        $statement->bindValue(':timestamp', $timestamp, PDO::PARAM_STR);
 
         return $statement->execute();
     }

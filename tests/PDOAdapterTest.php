@@ -50,24 +50,26 @@ class PDOAdapterTest extends \PHPUnit_Framework_TestCase
         $this->filesystem= new Filesystem($this->adapter);
     }
 
-    protected function getTableContents()
+    protected function getTableContents($stripTimestampFromReturnedRows = true)
     {
         $statement = $this->pdo->prepare("SELECT * FROM files");
         $statement->execute();
         $result = $statement->fetchAll(PDO::FETCH_ASSOC);
 
-        return array_map(function($v) {
+        return array_map(function($v) use($stripTimestampFromReturnedRows) {
             unset($v['id']);
-            unset($v['timestamp']);
+            if($stripTimestampFromReturnedRows) {
+                unset($v['timestamp']);
+            }
             $v['size'] = (int) $v['size'];
 
             return $v;
         }, $result);
     }
 
-    protected function assertTableContains($expected)
+    protected function assertTableContains($expected, $stripTimestampFromReturnedRows = true)
     {
-        $this->assertEquals($expected, $this->getTableContents());
+        $this->assertEquals($expected, $this->getTableContents($stripTimestampFromReturnedRows));
     }
 
     protected function filterContents($contents)
@@ -122,6 +124,25 @@ class PDOAdapterTest extends \PHPUnit_Framework_TestCase
             ['path' => $path1, 'contents' => $contents1, 'type' => 'file', 'size' => strlen($contents1), 'mimetype' => 'text/plain'],
             ['path' => $path2, 'contents' => $contents2, 'type' => 'file', 'size' => strlen($contents2), 'mimetype' => 'text/plain']
         ]);
+    }
+
+    public function testWriteWithSpecificTimestamp()
+    {
+        $timestamp = \mktime(0, 0, 0, 1, 1, 2000);
+        $config = array('timestamp' => $timestamp);
+
+        $this->assertTrue($this->filesystem->createDir('foo', $config));
+
+        $path1 = 'foo/bar.txt';
+        $contents1 = 'ala ma kota';
+        $this->assertTrue($this->filesystem->write($path1, $contents1, $config));
+
+        $this->assertTableContains([
+                ['path' => 'foo', 'contents' => null, 'type' => 'dir', 'size' => 0, 'mimetype' => null, 'timestamp' => $timestamp],
+                ['path' => $path1, 'contents' => $contents1, 'type' => 'file', 'size' => strlen($contents1), 'mimetype' => 'text/plain', 'timestamp' => $timestamp]
+            ],
+            false
+        );
     }
 
     public function testListContents()
