@@ -51,7 +51,7 @@ class PDOAdapterTest extends \PHPUnit_Framework_TestCase
         $this->pdo->exec($createTableSql);
 
         $this->adapter = new PDOAdapter($this->pdo, $this->table, $this->pathPrefix);
-        $this->filesystem= new Filesystem($this->adapter);
+        $this->filesystem = new Filesystem($this->adapter);
     }
 
     protected function getTableContents($stripTimestampFromReturnedRows = true)
@@ -60,13 +60,13 @@ class PDOAdapterTest extends \PHPUnit_Framework_TestCase
         $statement->execute();
         $result = $statement->fetchAll(PDO::FETCH_ASSOC);
 
-        return array_map(function($v) use($stripTimestampFromReturnedRows) {
+        return array_map(function ($v) use ($stripTimestampFromReturnedRows) {
             unset($v['id']);
-            if($stripTimestampFromReturnedRows) {
+            if ($stripTimestampFromReturnedRows) {
                 unset($v['timestamp']);
             }
             $v['path'] = $this->adapter->removePathPrefix($v['path']);
-            $v['size'] = (int) $v['size'];
+            $v['size'] = (int)$v['size'];
 
             return $v;
         }, $result);
@@ -79,7 +79,7 @@ class PDOAdapterTest extends \PHPUnit_Framework_TestCase
 
     protected function filterContents($contents)
     {
-        return array_map(function($v) {
+        return array_map(function ($v) {
             unset($v['timestamp']);
 
             return $v;
@@ -117,7 +117,13 @@ class PDOAdapterTest extends \PHPUnit_Framework_TestCase
 
         $this->assertTableContains([
             ['path' => 'foo', 'contents' => null, 'type' => 'dir', 'size' => 0, 'mimetype' => null],
-            ['path' => $path1, 'contents' => $contents1, 'type' => 'file', 'size' => strlen($contents1), 'mimetype' => 'text/plain']
+            [
+                'path' => $path1,
+                'contents' => $contents1,
+                'type' => 'file',
+                'size' => strlen($contents1),
+                'mimetype' => 'text/plain'
+            ]
         ]);
 
         $path2 = 'foo/bar/baz.txt';
@@ -126,8 +132,20 @@ class PDOAdapterTest extends \PHPUnit_Framework_TestCase
 
         $this->assertTableContains([
             ['path' => 'foo', 'contents' => null, 'type' => 'dir', 'size' => 0, 'mimetype' => null],
-            ['path' => $path1, 'contents' => $contents1, 'type' => 'file', 'size' => strlen($contents1), 'mimetype' => 'text/plain'],
-            ['path' => $path2, 'contents' => $contents2, 'type' => 'file', 'size' => strlen($contents2), 'mimetype' => 'text/plain']
+            [
+                'path' => $path1,
+                'contents' => $contents1,
+                'type' => 'file',
+                'size' => strlen($contents1),
+                'mimetype' => 'text/plain'
+            ],
+            [
+                'path' => $path2,
+                'contents' => $contents2,
+                'type' => 'file',
+                'size' => strlen($contents2),
+                'mimetype' => 'text/plain'
+            ]
         ]);
     }
 
@@ -143,9 +161,23 @@ class PDOAdapterTest extends \PHPUnit_Framework_TestCase
         $this->assertTrue($this->filesystem->write($path1, $contents1, $config));
 
         $this->assertTableContains([
-                ['path' => 'foo', 'contents' => null, 'type' => 'dir', 'size' => 0, 'mimetype' => null, 'timestamp' => $timestamp],
-                ['path' => $path1, 'contents' => $contents1, 'type' => 'file', 'size' => strlen($contents1), 'mimetype' => 'text/plain', 'timestamp' => $timestamp]
+            [
+                'path' => 'foo',
+                'contents' => null,
+                'type' => 'dir',
+                'size' => 0,
+                'mimetype' => null,
+                'timestamp' => $timestamp
             ],
+            [
+                'path' => $path1,
+                'contents' => $contents1,
+                'type' => 'file',
+                'size' => strlen($contents1),
+                'mimetype' => 'text/plain',
+                'timestamp' => $timestamp
+            ]
+        ],
             false
         );
     }

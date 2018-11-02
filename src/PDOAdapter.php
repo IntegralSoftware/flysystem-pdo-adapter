@@ -25,13 +25,13 @@ class PDOAdapter extends AbstractAdapter
      */
     protected $table;
 
-	/**
-	 * PDOAdapter constructor.
-	 *
-	 * @param PDO $pdo
-	 * @param string $tableName
-	 * @param string|null $pathPrefix
-	 */
+    /**
+     * PDOAdapter constructor.
+     *
+     * @param PDO $pdo
+     * @param string $tableName
+     * @param string|null $pathPrefix
+     */
     public function __construct(PDO $pdo, $tableName, $pathPrefix = null)
     {
         $this->pdo = $pdo;
@@ -88,7 +88,7 @@ class PDOAdapter extends AbstractAdapter
         $mimetype = Util::guessMimeType($path, $contents);
         $timestamp = $config->get('timestamp', time());
 
-		$pathWithPrefix = $this->applyPathPrefix($path);
+        $pathWithPrefix = $this->applyPathPrefix($path);
 
         $statement->bindParam(':size', $size, PDO::PARAM_INT);
         $statement->bindParam(':mimetype', $mimetype, PDO::PARAM_STR);
@@ -112,7 +112,7 @@ class PDOAdapter extends AbstractAdapter
      */
     public function rename($path, $newpath)
     {
-		$pathWithPrefix = $this->applyPathPrefix($path);
+        $pathWithPrefix = $this->applyPathPrefix($path);
         $statement = $this->pdo->prepare("SELECT type FROM {$this->table} WHERE path=:path");
         $statement->bindParam(':path', $pathWithPrefix, PDO::PARAM_STR);
 
@@ -140,8 +140,8 @@ class PDOAdapter extends AbstractAdapter
 
         $statement = $this->pdo->prepare("UPDATE {$this->table} SET path=:newpath WHERE path=:path");
 
-		$pathWithPrefix = $this->applyPathPrefix($path);
-		$newPathWithPrefix = $this->applyPathPrefix($newpath);
+        $pathWithPrefix = $this->applyPathPrefix($path);
+        $newPathWithPrefix = $this->applyPathPrefix($newpath);
         $statement->bindParam(':path', $pathWithPrefix, PDO::PARAM_STR);
         $statement->bindParam(':newpath', $newPathWithPrefix, PDO::PARAM_STR);
 
@@ -154,7 +154,7 @@ class PDOAdapter extends AbstractAdapter
     public function copy($path, $newpath)
     {
         $statement = $this->pdo->prepare("SELECT * FROM {$this->table} WHERE path=:path");
-		$pathWithPrefix = $this->applyPathPrefix($path);
+        $pathWithPrefix = $this->applyPathPrefix($path);
         $statement->bindParam(':path', $pathWithPrefix, PDO::PARAM_STR);
 
         if ($statement->execute()) {
@@ -162,7 +162,7 @@ class PDOAdapter extends AbstractAdapter
 
             if (!empty($result)) {
                 $statement = $this->pdo->prepare("INSERT INTO {$this->table} (path, contents, size, type, mimetype, timestamp) VALUES(:path, :contents, :size, :type, :mimetype, :timestamp)");
-				$newPathWithPrefix = $this->applyPathPrefix($newpath);
+                $newPathWithPrefix = $this->applyPathPrefix($newpath);
                 $statement->bindParam(':path', $newPathWithPrefix, PDO::PARAM_STR);
                 $statement->bindParam(':contents', $result['contents'], PDO::PARAM_LOB);
                 $statement->bindParam(':size', $result['size'], PDO::PARAM_INT);
@@ -183,7 +183,7 @@ class PDOAdapter extends AbstractAdapter
     public function delete($path)
     {
         $statement = $this->pdo->prepare("DELETE FROM {$this->table} WHERE path=:path");
-		$pathWithPrefix = $this->applyPathPrefix($path);
+        $pathWithPrefix = $this->applyPathPrefix($path);
         $statement->bindParam(':path', $pathWithPrefix, PDO::PARAM_STR);
 
         return $statement->execute();
@@ -208,7 +208,7 @@ class PDOAdapter extends AbstractAdapter
         }
 
         $statement = $this->pdo->prepare("DELETE FROM {$this->table} WHERE path=:path AND type='dir'");
-		$dirnameWithPrefix = $this->applyPathPrefix($dirname);
+        $dirnameWithPrefix = $this->applyPathPrefix($dirname);
         $statement->bindParam(':path', $dirnameWithPrefix, PDO::PARAM_STR);
 
         return $statement->execute();
@@ -243,7 +243,7 @@ class PDOAdapter extends AbstractAdapter
         $statement->bindParam(':path', $pathWithPrefix, PDO::PARAM_STR);
 
         if ($statement->execute()) {
-            return (bool) $statement->fetch(PDO::FETCH_ASSOC);
+            return (bool)$statement->fetch(PDO::FETCH_ASSOC);
         }
 
         return false;
@@ -256,7 +256,7 @@ class PDOAdapter extends AbstractAdapter
     {
         $statement = $this->pdo->prepare("SELECT contents FROM {$this->table} WHERE path=:path");
 
-		$pathWithPrefix = $this->applyPathPrefix($path);
+        $pathWithPrefix = $this->applyPathPrefix($path);
         $statement->bindParam(':path', $pathWithPrefix, PDO::PARAM_STR);
 
         if ($statement->execute()) {
@@ -293,7 +293,7 @@ class PDOAdapter extends AbstractAdapter
     {
         $query = "SELECT path, size, type, mimetype, timestamp FROM {$this->table}";
 
-        $useWhere = (bool) strlen($this->applyPathPrefix($directory));
+        $useWhere = (bool)strlen($this->applyPathPrefix($directory));
 
         if ($useWhere) {
             $query .= " WHERE path LIKE :path_prefix OR path=:path";
@@ -314,9 +314,9 @@ class PDOAdapter extends AbstractAdapter
 
         $result = $statement->fetchAll(PDO::FETCH_ASSOC);
 
-        $result = array_map(function($v) {
-            $v['timestamp'] = (int) $v['timestamp'];
-            $v['size'] = (int) $v['size'];
+        $result = array_map(function ($v) {
+            $v['timestamp'] = (int)$v['timestamp'];
+            $v['size'] = (int)$v['size'];
             $v['path'] = $this->removePathPrefix($v['path']);
             $v['dirname'] = Util::dirname($v['path']);
 
