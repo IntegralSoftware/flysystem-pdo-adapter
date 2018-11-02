@@ -50,10 +50,7 @@ class PDOAdapterTest extends \PHPUnit_Framework_TestCase
 
         $this->pdo->exec($createTableSql);
 
-        $this->adapter = new PDOAdapter($this->pdo, [
-            'tableName' => $this->table,
-            'prefix' => $this->pathPrefix
-        ]);
+        $this->adapter = new PDOAdapter($this->pdo, $this->table, $this->pathPrefix);
         $this->filesystem= new Filesystem($this->adapter);
     }
 

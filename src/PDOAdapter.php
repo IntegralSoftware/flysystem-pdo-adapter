@@ -24,33 +24,23 @@ class PDOAdapter extends AbstractAdapter
      * @var string
      */
     protected $table;
-    /**
-     * @var string
-     */
-    protected $pathPrefix;
-    /**
-     * @var string
-     */
-    protected $pathSeparator = '/';
 
-    /**
-     * PDOAdapter constructor.
-     *
-     * @param PDO    $pdo
-     * @param string $tableName
-     */
-    public function __construct(PDO $pdo, $settings = [])
+	/**
+	 * PDOAdapter constructor.
+	 *
+	 * @param PDO $pdo
+	 * @param string $tableName
+	 * @param string|null $pathPrefix
+	 */
+    public function __construct(PDO $pdo, $tableName, $pathPrefix = null)
     {
         $this->pdo = $pdo;
-
-        $tableName = isset($settings['tableName']) ? $settings['tableName'] : null;
-        $prefix = isset($settings['prefix']) ? $settings['prefix'] : '';
 
         if (!preg_match('/^[a-zA-Z_][a-zA-Z0-9_.]*$/', $tableName)) {
             throw new \InvalidArgumentException('Invalid table name');
         }
 
-        $this->setPathPrefix($prefix);
+        $this->setPathPrefix($pathPrefix);
 
         $this->table = $tableName;
     }
@@ -67,7 +57,9 @@ class PDOAdapter extends AbstractAdapter
         $mimetype = Util::guessMimeType($path, $contents);
         $timestamp = $config->get('timestamp', time());
 
-        $statement->bindParam(':path', $this->applyPathPrefix($path), PDO::PARAM_STR);
+        $pathWithPrefix = $this->applyPathPrefix($path);
+
+        $statement->bindParam(':path', $pathWithPrefix, PDO::PARAM_STR);
         $statement->bindParam(':contents', $contents, PDO::PARAM_LOB);
         $statement->bindParam(':size', $size, PDO::PARAM_INT);
         $statement->bindParam(':type', $type, PDO::PARAM_STR);
@@ -96,10 +88,12 @@ class PDOAdapter extends AbstractAdapter
         $mimetype = Util::guessMimeType($path, $contents);
         $timestamp = $config->get('timestamp', time());
 
+		$pathWithPrefix = $this->applyPathPrefix($path);
+
         $statement->bindParam(':size', $size, PDO::PARAM_INT);
         $statement->bindParam(':mimetype', $mimetype, PDO::PARAM_STR);
         $statement->bindParam(':newcontents', $contents, PDO::PARAM_LOB);
-        $statement->bindParam(':path', $this->applyPathPrefix($path), PDO::PARAM_STR);
+        $statement->bindParam(':path', $pathWithPrefix, PDO::PARAM_STR);
         $statement->bindParam(':timestamp', $timestamp, PDO::PARAM_INT);
 
         return $statement->execute() ? compact('path', 'contents', 'size', 'mimetype', 'timestamp') : false;
@@ -118,8 +112,9 @@ class PDOAdapter extends AbstractAdapter
      */
     public function rename($path, $newpath)
     {
+		$pathWithPrefix = $this->applyPathPrefix($path);
         $statement = $this->pdo->prepare("SELECT type FROM {$this->table} WHERE path=:path");
-        $statement->bindParam(':path', $this->applyPathPrefix($path), PDO::PARAM_STR);
+        $statement->bindParam(':path', $pathWithPrefix, PDO::PARAM_STR);
 
         if ($statement->execute()) {
             $object = $statement->fetch(PDO::FETCH_ASSOC);
@@ -145,8 +140,10 @@ class PDOAdapter extends AbstractAdapter
 
         $statement = $this->pdo->prepare("UPDATE {$this->table} SET path=:newpath WHERE path=:path");
 
-        $statement->bindParam(':path', $this->applyPathPrefix($path), PDO::PARAM_STR);
-        $statement->bindParam(':newpath', $this->applyPathPrefix($newpath), PDO::PARAM_STR);
+		$pathWithPrefix = $this->applyPathPrefix($path);
+		$newPathWithPrefix = $this->applyPathPrefix($newpath);
+        $statement->bindParam(':path', $pathWithPrefix, PDO::PARAM_STR);
+        $statement->bindParam(':newpath', $newPathWithPrefix, PDO::PARAM_STR);
 
         return $statement->execute();
     }
@@ -157,16 +154,16 @@ class PDOAdapter extends AbstractAdapter
     public function copy($path, $newpath)
     {
         $statement = $this->pdo->prepare("SELECT * FROM {$this->table} WHERE path=:path");
-
-        $statement->bindParam(':path', $this->applyPathPrefix($path), PDO::PARAM_STR);
+		$pathWithPrefix = $this->applyPathPrefix($path);
+        $statement->bindParam(':path', $pathWithPrefix, PDO::PARAM_STR);
 
         if ($statement->execute()) {
             $result = $statement->fetch(PDO::FETCH_ASSOC);
 
             if (!empty($result)) {
                 $statement = $this->pdo->prepare("INSERT INTO {$this->table} (path, contents, size, type, mimetype, timestamp) VALUES(:path, :contents, :size, :type, :mimetype, :timestamp)");
-
-                $statement->bindParam(':path', $this->applyPathPrefix($newpath), PDO::PARAM_STR);
+				$newPathWithPrefix = $this->applyPathPrefix($newpath);
+                $statement->bindParam(':path', $newPathWithPrefix, PDO::PARAM_STR);
                 $statement->bindParam(':contents', $result['contents'], PDO::PARAM_LOB);
                 $statement->bindParam(':size', $result['size'], PDO::PARAM_INT);
                 $statement->bindParam(':type', $result['type'], PDO::PARAM_STR);
@@ -186,8 +183,8 @@ class PDOAdapter extends AbstractAdapter
     public function delete($path)
     {
         $statement = $this->pdo->prepare("DELETE FROM {$this->table} WHERE path=:path");
-
-        $statement->bindParam(':path', $this->applyPathPrefix($path), PDO::PARAM_STR);
+		$pathWithPrefix = $this->applyPathPrefix($path);
+        $statement->bindParam(':path', $pathWithPrefix, PDO::PARAM_STR);
 
         return $statement->execute();
     }
@@ -211,8 +208,8 @@ class PDOAdapter extends AbstractAdapter
         }
 
         $statement = $this->pdo->prepare("DELETE FROM {$this->table} WHERE path=:path AND type='dir'");
-
-        $statement->bindParam(':path', $this->applyPathPrefix($dirname), PDO::PARAM_STR);
+		$dirnameWithPrefix = $this->applyPathPrefix($dirname);
+        $statement->bindParam(':path', $dirnameWithPrefix, PDO::PARAM_STR);
 
         return $statement->execute();
     }
@@ -226,7 +223,9 @@ class PDOAdapter extends AbstractAdapter
 
         $timestamp = $config->get('timestamp', time());
 
-        $statement->bindParam(':path', $this->applyPathPrefix($dirname), PDO::PARAM_STR);
+        $dirnameWithPrefix = $this->applyPathPrefix($dirname);
+
+        $statement->bindParam(':path', $dirnameWithPrefix, PDO::PARAM_STR);
         $statement->bindValue(':type', 'dir', PDO::PARAM_STR);
         $statement->bindValue(':timestamp', $timestamp, PDO::PARAM_STR);
 
@@ -240,7 +239,8 @@ class PDOAdapter extends AbstractAdapter
     {
         $statement = $this->pdo->prepare("SELECT id FROM {$this->table} WHERE path=:path");
 
-        $statement->bindParam(':path', $this->applyPathPrefix($path), PDO::PARAM_STR);
+        $pathWithPrefix = $this->applyPathPrefix($path);
+        $statement->bindParam(':path', $pathWithPrefix, PDO::PARAM_STR);
 
         if ($statement->execute()) {
             return (bool) $statement->fetch(PDO::FETCH_ASSOC);
@@ -256,7 +256,8 @@ class PDOAdapter extends AbstractAdapter
     {
         $statement = $this->pdo->prepare("SELECT contents FROM {$this->table} WHERE path=:path");
 
-        $statement->bindParam(':path', $this->applyPathPrefix($path), PDO::PARAM_STR);
+		$pathWithPrefix = $this->applyPathPrefix($path);
+        $statement->bindParam(':path', $pathWithPrefix, PDO::PARAM_STR);
 
         if ($statement->execute()) {
             return $statement->fetch(PDO::FETCH_ASSOC);
@@ -303,7 +304,8 @@ class PDOAdapter extends AbstractAdapter
         if ($useWhere) {
             $pathPrefix = $this->applyPathPrefix($directory . '/') . '%';
             $statement->bindParam(':path_prefix', $pathPrefix, PDO::PARAM_STR);
-            $statement->bindParam(':path', $this->applyPathPrefix($directory), PDO::PARAM_STR);
+            $directoryWithPrefix = $this->applyPathPrefix($directory);
+            $statement->bindParam(':path', $directoryWithPrefix, PDO::PARAM_STR);
         }
 
         if (!$statement->execute()) {
@@ -341,7 +343,8 @@ class PDOAdapter extends AbstractAdapter
     {
         $statement = $this->pdo->prepare("SELECT id, path, size, type, mimetype, timestamp FROM {$this->table} WHERE path=:path");
 
-        $statement->bindParam(':path', $this->applyPathPrefix($path), PDO::PARAM_STR);
+        $pathWithPrefix = $this->applyPathPrefix($path);
+        $statement->bindParam(':path', $pathWithPrefix, PDO::PARAM_STR);
 
         if ($statement->execute()) {
             return $statement->fetch(PDO::FETCH_ASSOC);
