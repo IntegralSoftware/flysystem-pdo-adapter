@@ -27,6 +27,10 @@ class PDOAdapterTest extends \PHPUnit_Framework_TestCase
      * @var string
      */
     protected $table = 'files';
+    /**
+     * @var string
+     */
+    protected $pathPrefix = '/test/';
 
     public function setUp()
     {
@@ -46,7 +50,10 @@ class PDOAdapterTest extends \PHPUnit_Framework_TestCase
 
         $this->pdo->exec($createTableSql);
 
-        $this->adapter = new PDOAdapter($this->pdo, $this->table);
+        $this->adapter = new PDOAdapter($this->pdo, [
+            'tableName' => $this->table,
+            'prefix' => $this->pathPrefix
+        ]);
         $this->filesystem= new Filesystem($this->adapter);
     }
 
@@ -61,6 +68,7 @@ class PDOAdapterTest extends \PHPUnit_Framework_TestCase
             if($stripTimestampFromReturnedRows) {
                 unset($v['timestamp']);
             }
+            $v['path'] = $this->adapter->removePathPrefix($v['path']);
             $v['size'] = (int) $v['size'];
 
             return $v;
