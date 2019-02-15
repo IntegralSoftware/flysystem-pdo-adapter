@@ -199,15 +199,11 @@ class PDOAdapter extends AbstractAdapter
      */
     public function copy($path, $newpath)
     {
-        if (! $this->has($path)) {
-            return false;
-        }
         $newPathWithPrefix = $this->applyPathPrefix($newpath);
         $pathWithPrefix = $this->applyPathPrefix($path);
-        $statement = $this->pdo->prepare("INSERT INTO {$this->table} (path, contents, size, type, mimetype, timestamp) SELECT :newpath, contents, size, type, mimetype, timestamp FROM {$this->table} WHERE path = :path");
-        $statement->bindParam(':path', $pathWithPrefix, PDO::PARAM_STR);
-        $statement->bindParam(':newpath', $newPathWithPrefix, PDO::PARAM_STR);
-        return $statement->execute();
+        // We try to make a one-liner to avoid race condition
+        // betwween a $this->has() and the actual copy.
+        return (bool)$this->pdo->exec(sprintf("INSERT INTO %s (path, contents, size, type, mimetype, timestamp) SELECT %s, contents, size, type, mimetype, timestamp FROM %s WHERE path = %s", $this->table, $this->pdo->quote($newPathWithPrefix), $this->table, $this->pdo->quote($pathWithPrefix)));
     }
 
     /**
