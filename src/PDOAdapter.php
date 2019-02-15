@@ -250,9 +250,13 @@ class PDOAdapter extends AbstractAdapter
     }
 
     /**
-     * {@inheritdoc}
+     * This function prepare the way for read() and readStream()
+     *
+     * @param string $path
+     *
+     * @return PDOStatement|false
      */
-    public function read($path)
+    public function readPrepare($path)
     {
         $statement = $this->pdo->prepare("SELECT contents FROM {$this->table} WHERE path=:path");
 
@@ -260,7 +264,24 @@ class PDOAdapter extends AbstractAdapter
         $statement->bindParam(':path', $pathWithPrefix, PDO::PARAM_STR);
 
         if ($statement->execute()) {
-            return $statement->fetch(PDO::FETCH_ASSOC);
+            return $statement;
+        }
+        return false;
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function read($path)
+    {
+        $statement = $this->readPrepare($path);
+        if ($statement and ($result = $statement->fetch(PDO::FETCH_ASSOC))) {
+            if (is_resource($result['contents'])) {
+                // Some PDO drivers return a stream (as should be for LOB ?)
+                // so we need to retrieve it entirely.
+                $result['contents'] = stream_get_contents($result['contents']);
+            }
+            return $result;
         }
 
         return false;
@@ -271,17 +292,23 @@ class PDOAdapter extends AbstractAdapter
      */
     public function readStream($path)
     {
-        $stream = fopen('php://temp', 'w+');
-        $result = $this->read($path);
-
-        if (!$result) {
-            fclose($stream);
-
+        if (! ($statement = $this->readPrepare($path))) {
             return false;
         }
 
-        fwrite($stream, $result['contents']);
-        rewind($stream);
+        $statement->bindColumn(1, $stream, PDO::PARAM_LOB);
+        if (! $statement->fetch(PDO::FETCH_BOUND)) {
+            return false;
+        }
+
+        if (! is_resource($stream)) {
+            // Some PDO drivers (MySQL, SQLite) don't return a stream, so we simulate one
+            // see https://bugs.php.net/bug.php?id=40913
+            $result = $stream;
+            $stream = fopen('php://temp', 'w+');
+            fwrite($stream, $result);
+            rewind($stream);
+        }
 
         return compact('stream');
     }
