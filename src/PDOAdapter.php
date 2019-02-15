@@ -74,7 +74,32 @@ class PDOAdapter extends AbstractAdapter
      */
     public function writeStream($path, $resource, Config $config)
     {
-        return $this->write($path, stream_get_contents($resource), $config);
+        $statement = $this->pdo->prepare("INSERT INTO {$this->table} (path, contents, size, type, mimetype, timestamp) VALUES(:path, :contents, :size, :type, :mimetype, :timestamp)");
+
+        $size = 0; // see below
+        $type = 'file';
+        $mimetype = Util::guessMimeType($path, '');
+        $timestamp = $config->get('timestamp', time());
+
+        $pathWithPrefix = $this->applyPathPrefix($path);
+
+        $statement->bindParam(':path', $pathWithPrefix, PDO::PARAM_STR);
+        $statement->bindParam(':contents', $resource, PDO::PARAM_LOB);
+        $statement->bindParam(':size', $size, PDO::PARAM_INT);
+        $statement->bindParam(':type', $type, PDO::PARAM_STR);
+        $statement->bindParam(':mimetype', $mimetype, PDO::PARAM_STR);
+        $statement->bindParam(':timestamp', $timestamp, PDO::PARAM_INT);
+        $output = $statement->execute() ? compact('path', 'type', 'mimetype', 'timestamp') : false;
+
+        if ($output) {
+            // Correct the size afterwards
+            // It seems all drivers are happy with LENGTH(binary)
+            $statement = $this->pdo->prepare("UPDATE {$this->table} SET size = LENGTH(contents) WHERE path = :path");
+            $statement->bindParam(':path', $pathWithPrefix, PDO::PARAM_STR);
+            $statement->execute();
+        }
+
+        return $output;
     }
 
     /**
@@ -104,7 +129,28 @@ class PDOAdapter extends AbstractAdapter
      */
     public function updateStream($path, $resource, Config $config)
     {
-        return $this->update($path, stream_get_contents($resource), $config);
+        $statement = $this->pdo->prepare("UPDATE {$this->table} SET contents=:newcontents, mimetype=:mimetype, timestamp=:timestamp WHERE path=:path");
+
+        $mimetype = Util::guessMimeType($path, '');
+        $timestamp = $config->get('timestamp', time());
+
+        $pathWithPrefix = $this->applyPathPrefix($path);
+
+        $statement->bindParam(':mimetype', $mimetype, PDO::PARAM_STR);
+        $statement->bindParam(':newcontents', $resource, PDO::PARAM_LOB);
+        $statement->bindParam(':path', $pathWithPrefix, PDO::PARAM_STR);
+        $statement->bindParam(':timestamp', $timestamp, PDO::PARAM_INT);
+        $output = $statement->execute() ? compact('path', 'mimetype', 'timestamp') : false;
+
+        if ($output) {
+            // Correct the size afterwards
+            // It seems all drivers are happy with LENGTH(binary)
+            $statement = $this->pdo->prepare("UPDATE {$this->table} SET size = LENGTH(contents) WHERE path = :path");
+            $statement->bindParam(':path', $pathWithPrefix, PDO::PARAM_STR);
+            $statement->execute();
+        }
+
+        return $output;
     }
 
     /**
