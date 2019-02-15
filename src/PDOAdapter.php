@@ -199,28 +199,15 @@ class PDOAdapter extends AbstractAdapter
      */
     public function copy($path, $newpath)
     {
-        $statement = $this->pdo->prepare("SELECT * FROM {$this->table} WHERE path=:path");
-        $pathWithPrefix = $this->applyPathPrefix($path);
-        $statement->bindParam(':path', $pathWithPrefix, PDO::PARAM_STR);
-
-        if ($statement->execute()) {
-            $result = $statement->fetch(PDO::FETCH_ASSOC);
-
-            if (!empty($result)) {
-                $statement = $this->pdo->prepare("INSERT INTO {$this->table} (path, contents, size, type, mimetype, timestamp) VALUES(:path, :contents, :size, :type, :mimetype, :timestamp)");
-                $newPathWithPrefix = $this->applyPathPrefix($newpath);
-                $statement->bindParam(':path', $newPathWithPrefix, PDO::PARAM_STR);
-                $statement->bindParam(':contents', $result['contents'], PDO::PARAM_LOB);
-                $statement->bindParam(':size', $result['size'], PDO::PARAM_INT);
-                $statement->bindParam(':type', $result['type'], PDO::PARAM_STR);
-                $statement->bindParam(':mimetype', $result['mimetype'], PDO::PARAM_STR);
-                $statement->bindValue(':timestamp', time(), PDO::PARAM_INT);
-
-                return $statement->execute();
-            }
+        if (! $this->has($path)) {
+            return false;
         }
-
-        return false;
+        $newPathWithPrefix = $this->applyPathPrefix($newpath);
+        $pathWithPrefix = $this->applyPathPrefix($path);
+        $statement = $this->pdo->prepare("INSERT INTO {$this->table} (path, contents, size, type, mimetype, timestamp) SELECT :newpath, contents, size, type, mimetype, timestamp FROM {$this->table} WHERE path = :path");
+        $statement->bindParam(':path', $pathWithPrefix, PDO::PARAM_STR);
+        $statement->bindParam(':newpath', $newPathWithPrefix, PDO::PARAM_STR);
+        return $statement->execute();
     }
 
     /**
