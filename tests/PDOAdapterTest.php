@@ -27,6 +27,7 @@ class PDOAdapterTest extends \PHPUnit_Framework_TestCase
      * @var string
      */
     protected $table = 'files';
+
     /**
      * @var string
      */
@@ -37,16 +38,47 @@ class PDOAdapterTest extends \PHPUnit_Framework_TestCase
         $this->pdo = new PDO('sqlite::memory:');
         $this->pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
-        $createTableSql =
-            'CREATE TABLE files (
-                id INTEGER PRIMARY KEY,
-                path TEXT NOT NULL UNIQUE,
-                type TEXT NOT NULL,
-                contents BLOB,
-                size INTEGER NOT NULL DEFAULT 0,
-                mimetype TEXT,
-                timestamp INTEGER NOT NULL DEFAULT 0
-            )';
+        switch($this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME)) {
+            case 'sqlite':
+                $createTableSql =
+                    "CREATE TABLE {$this->table} (
+                        id INTEGER PRIMARY KEY,
+                        path TEXT NOT NULL UNIQUE,
+                        type TEXT NOT NULL,
+                        contents BLOB,
+                        size INTEGER NOT NULL DEFAULT 0,
+                        mimetype TEXT,
+                        timestamp INTEGER NOT NULL DEFAULT 0
+                    )";
+                    break;
+
+            case 'mysql':
+                $createTableSql =
+                    "CREATE TABLE {$this->table} (
+                        id INTEGER PRIMARY KEY AUTO_INCREMENT,
+                        path VARCHAR(191) NOT NULL UNIQUE,
+                        type enum('file','dir') NOT NULL,
+                        contents LONGBLOB,
+                        size INTEGER NOT NULL DEFAULT 0,
+                        mimetype VARCHAR(127),
+                        timestamp INTEGER NOT NULL DEFAULT 0
+                    )";
+                    break;
+
+            case 'pgsql':
+                $createTableSql =
+                    "CREATE TABLE {$this->table} (
+                        id SERIAL PRIMARY KEY,
+                        path TEXT NOT NULL UNIQUE,
+                        type TEXT NOT NULL,
+                        contents BYTEA,
+                        size INTEGER NOT NULL DEFAULT 0,
+                        mimetype TEXT,
+                        timestamp INTEGER NOT NULL DEFAULT 0,
+                        CONSTRAINT type_check CHECK (type='dir' or type='file')
+                    )";
+                    break;
+        }
 
         $this->pdo->exec($createTableSql);
 
@@ -54,9 +86,14 @@ class PDOAdapterTest extends \PHPUnit_Framework_TestCase
         $this->filesystem = new Filesystem($this->adapter);
     }
 
+    public function tearDown()
+    {
+        $this->pdo->exec("DROP TABLE {$this->table}");
+    }
+
     protected function getTableContents($stripTimestampFromReturnedRows = true)
     {
-        $statement = $this->pdo->prepare("SELECT * FROM files");
+        $statement = $this->pdo->prepare("SELECT * FROM {$this->table}");
         $statement->execute();
         $result = $statement->fetchAll(PDO::FETCH_ASSOC);
 
@@ -67,6 +104,11 @@ class PDOAdapterTest extends \PHPUnit_Framework_TestCase
             }
             $v['path'] = $this->adapter->removePathPrefix($v['path']);
             $v['size'] = (int)$v['size'];
+            if (is_resource($v['contents'])) {
+                $fh = $v['contents'];
+                $v['contents'] = stream_get_contents($fh);
+                fclose($fh);
+            }
 
             return $v;
         }, $result);
