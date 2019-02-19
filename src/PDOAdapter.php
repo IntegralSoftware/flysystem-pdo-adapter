@@ -74,7 +74,32 @@ class PDOAdapter extends AbstractAdapter
      */
     public function writeStream($path, $resource, Config $config)
     {
-        return $this->write($path, stream_get_contents($resource), $config);
+        $statement = $this->pdo->prepare("INSERT INTO {$this->table} (path, contents, size, type, mimetype, timestamp) VALUES(:path, :contents, :size, :type, :mimetype, :timestamp)");
+
+        $size = 0; // see below
+        $type = 'file';
+        $mimetype = Util::guessMimeType($path, '');
+        $timestamp = $config->get('timestamp', time());
+
+        $pathWithPrefix = $this->applyPathPrefix($path);
+
+        $statement->bindParam(':path', $pathWithPrefix, PDO::PARAM_STR);
+        $statement->bindParam(':contents', $resource, PDO::PARAM_LOB);
+        $statement->bindParam(':size', $size, PDO::PARAM_INT);
+        $statement->bindParam(':type', $type, PDO::PARAM_STR);
+        $statement->bindParam(':mimetype', $mimetype, PDO::PARAM_STR);
+        $statement->bindParam(':timestamp', $timestamp, PDO::PARAM_INT);
+        $output = $statement->execute() ? compact('path', 'type', 'mimetype', 'timestamp') : false;
+
+        if ($output) {
+            // Correct the size afterwards
+            // It seems all drivers are happy with LENGTH(binary)
+            $statement = $this->pdo->prepare("UPDATE {$this->table} SET size = LENGTH(contents) WHERE path = :path");
+            $statement->bindParam(':path', $pathWithPrefix, PDO::PARAM_STR);
+            $statement->execute();
+        }
+
+        return $output;
     }
 
     /**
@@ -104,7 +129,28 @@ class PDOAdapter extends AbstractAdapter
      */
     public function updateStream($path, $resource, Config $config)
     {
-        return $this->update($path, stream_get_contents($resource), $config);
+        $statement = $this->pdo->prepare("UPDATE {$this->table} SET contents=:newcontents, mimetype=:mimetype, timestamp=:timestamp WHERE path=:path");
+
+        $mimetype = Util::guessMimeType($path, '');
+        $timestamp = $config->get('timestamp', time());
+
+        $pathWithPrefix = $this->applyPathPrefix($path);
+
+        $statement->bindParam(':mimetype', $mimetype, PDO::PARAM_STR);
+        $statement->bindParam(':newcontents', $resource, PDO::PARAM_LOB);
+        $statement->bindParam(':path', $pathWithPrefix, PDO::PARAM_STR);
+        $statement->bindParam(':timestamp', $timestamp, PDO::PARAM_INT);
+        $output = $statement->execute() ? compact('path', 'mimetype', 'timestamp') : false;
+
+        if ($output) {
+            // Correct the size afterwards
+            // It seems all drivers are happy with LENGTH(binary)
+            $statement = $this->pdo->prepare("UPDATE {$this->table} SET size = LENGTH(contents) WHERE path = :path");
+            $statement->bindParam(':path', $pathWithPrefix, PDO::PARAM_STR);
+            $statement->execute();
+        }
+
+        return $output;
     }
 
     /**
@@ -153,28 +199,11 @@ class PDOAdapter extends AbstractAdapter
      */
     public function copy($path, $newpath)
     {
-        $statement = $this->pdo->prepare("SELECT * FROM {$this->table} WHERE path=:path");
+        $newPathWithPrefix = $this->applyPathPrefix($newpath);
         $pathWithPrefix = $this->applyPathPrefix($path);
-        $statement->bindParam(':path', $pathWithPrefix, PDO::PARAM_STR);
-
-        if ($statement->execute()) {
-            $result = $statement->fetch(PDO::FETCH_ASSOC);
-
-            if (!empty($result)) {
-                $statement = $this->pdo->prepare("INSERT INTO {$this->table} (path, contents, size, type, mimetype, timestamp) VALUES(:path, :contents, :size, :type, :mimetype, :timestamp)");
-                $newPathWithPrefix = $this->applyPathPrefix($newpath);
-                $statement->bindParam(':path', $newPathWithPrefix, PDO::PARAM_STR);
-                $statement->bindParam(':contents', $result['contents'], PDO::PARAM_LOB);
-                $statement->bindParam(':size', $result['size'], PDO::PARAM_INT);
-                $statement->bindParam(':type', $result['type'], PDO::PARAM_STR);
-                $statement->bindParam(':mimetype', $result['mimetype'], PDO::PARAM_STR);
-                $statement->bindValue(':timestamp', time(), PDO::PARAM_INT);
-
-                return $statement->execute();
-            }
-        }
-
-        return false;
+        // We try to make a one-liner to avoid race condition
+        // betwween a $this->has() and the actual copy.
+        return (bool)$this->pdo->exec(sprintf("INSERT INTO %s (path, contents, size, type, mimetype, timestamp) SELECT %s, contents, size, type, mimetype, timestamp FROM %s WHERE path = %s", $this->table, $this->pdo->quote($newPathWithPrefix), $this->table, $this->pdo->quote($pathWithPrefix)));
     }
 
     /**
@@ -250,9 +279,13 @@ class PDOAdapter extends AbstractAdapter
     }
 
     /**
-     * {@inheritdoc}
+     * This function prepare the way for read() and readStream()
+     *
+     * @param string $path
+     *
+     * @return PDOStatement|false
      */
-    public function read($path)
+    public function readPrepare($path)
     {
         $statement = $this->pdo->prepare("SELECT contents FROM {$this->table} WHERE path=:path");
 
@@ -260,7 +293,24 @@ class PDOAdapter extends AbstractAdapter
         $statement->bindParam(':path', $pathWithPrefix, PDO::PARAM_STR);
 
         if ($statement->execute()) {
-            return $statement->fetch(PDO::FETCH_ASSOC);
+            return $statement;
+        }
+        return false;
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function read($path)
+    {
+        $statement = $this->readPrepare($path);
+        if ($statement and ($result = $statement->fetch(PDO::FETCH_ASSOC))) {
+            if (is_resource($result['contents'])) {
+                // Some PDO drivers return a stream (as should be for LOB ?)
+                // so we need to retrieve it entirely.
+                $result['contents'] = stream_get_contents($result['contents']);
+            }
+            return $result;
         }
 
         return false;
@@ -271,17 +321,23 @@ class PDOAdapter extends AbstractAdapter
      */
     public function readStream($path)
     {
-        $stream = fopen('php://temp', 'w+');
-        $result = $this->read($path);
-
-        if (!$result) {
-            fclose($stream);
-
+        if (! ($statement = $this->readPrepare($path))) {
             return false;
         }
 
-        fwrite($stream, $result['contents']);
-        rewind($stream);
+        $statement->bindColumn(1, $stream, PDO::PARAM_LOB);
+        if (! $statement->fetch(PDO::FETCH_BOUND)) {
+            return false;
+        }
+
+        if (! is_resource($stream)) {
+            // Some PDO drivers (MySQL, SQLite) don't return a stream, so we simulate one
+            // see https://bugs.php.net/bug.php?id=40913
+            $result = $stream;
+            $stream = fopen('php://temp', 'w+');
+            fwrite($stream, $result);
+            rewind($stream);
+        }
 
         return compact('stream');
     }
