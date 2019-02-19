@@ -6,7 +6,7 @@ use League\Flysystem\Adapter\AbstractAdapter;
 use League\Flysystem\Adapter\Polyfill\NotSupportingVisibilityTrait;
 use League\Flysystem\Config;
 use League\Flysystem\Util;
-use \PDO;
+use PDO;
 
 /**
  * Class PDOAdapter
@@ -16,7 +16,7 @@ class PDOAdapter extends AbstractAdapter
     use NotSupportingVisibilityTrait;
 
     /**
-     * @var \PDO
+     * @var PDO
      */
     protected $pdo;
 
@@ -50,7 +50,9 @@ class PDOAdapter extends AbstractAdapter
      */
     public function write($path, $contents, Config $config)
     {
-        $statement = $this->pdo->prepare("INSERT INTO {$this->table} (path, contents, size, type, mimetype, timestamp) VALUES(:path, :contents, :size, :type, :mimetype, :timestamp)");
+        $statement = $this->pdo->prepare(
+            "INSERT INTO {$this->table} (path, contents, size, type, mimetype, timestamp) VALUES(:path, :contents, :size, :type, :mimetype, :timestamp)"
+        );
 
         $size = strlen($contents);
         $type = 'file';
@@ -74,7 +76,9 @@ class PDOAdapter extends AbstractAdapter
      */
     public function writeStream($path, $resource, Config $config)
     {
-        $statement = $this->pdo->prepare("INSERT INTO {$this->table} (path, contents, size, type, mimetype, timestamp) VALUES(:path, :contents, :size, :type, :mimetype, :timestamp)");
+        $statement = $this->pdo->prepare(
+            "INSERT INTO {$this->table} (path, contents, size, type, mimetype, timestamp) VALUES(:path, :contents, :size, :type, :mimetype, :timestamp)"
+        );
 
         $size = 0; // see below
         $type = 'file';
@@ -107,7 +111,9 @@ class PDOAdapter extends AbstractAdapter
      */
     public function update($path, $contents, Config $config)
     {
-        $statement = $this->pdo->prepare("UPDATE {$this->table} SET contents=:newcontents, mimetype=:mimetype, size=:size, timestamp=:timestamp WHERE path=:path");
+        $statement = $this->pdo->prepare(
+            "UPDATE {$this->table} SET contents=:newcontents, mimetype=:mimetype, size=:size, timestamp=:timestamp WHERE path=:path"
+        );
 
         $size = strlen($contents);
         $mimetype = Util::guessMimeType($path, $contents);
@@ -129,7 +135,9 @@ class PDOAdapter extends AbstractAdapter
      */
     public function updateStream($path, $resource, Config $config)
     {
-        $statement = $this->pdo->prepare("UPDATE {$this->table} SET contents=:newcontents, mimetype=:mimetype, timestamp=:timestamp WHERE path=:path");
+        $statement = $this->pdo->prepare(
+            "UPDATE {$this->table} SET contents=:newcontents, mimetype=:mimetype, timestamp=:timestamp WHERE path=:path"
+        );
 
         $mimetype = Util::guessMimeType($path, '');
         $timestamp = $config->get('timestamp', time());
@@ -177,7 +185,7 @@ class PDOAdapter extends AbstractAdapter
 
                 foreach ($dirContents as $object) {
                     $currentObjectPath = $this->applyPathPrefix($object['path']);
-                    $newObjectPath = $this->applyPathPrefix($newpath . substr($object['path'], $pathLength));
+                    $newObjectPath = $this->applyPathPrefix($newpath.substr($object['path'], $pathLength));
 
                     $statement->execute();
                 }
@@ -201,9 +209,18 @@ class PDOAdapter extends AbstractAdapter
     {
         $newPathWithPrefix = $this->applyPathPrefix($newpath);
         $pathWithPrefix = $this->applyPathPrefix($path);
-        // We try to make a one-liner to avoid race condition
-        // betwween a $this->has() and the actual copy.
-        return (bool)$this->pdo->exec(sprintf("INSERT INTO %s (path, contents, size, type, mimetype, timestamp) SELECT %s, contents, size, type, mimetype, timestamp FROM %s WHERE path = %s", $this->table, $this->pdo->quote($newPathWithPrefix), $this->table, $this->pdo->quote($pathWithPrefix)));
+        // Use a one-liner to avoid race condition
+        // between a $this->has() and the actual copy.
+        return (bool)$this->pdo->exec(
+            sprintf(
+                "INSERT INTO %s (path, contents, size, type, mimetype, timestamp)
+                          SELECT %s, contents, size, type, mimetype, timestamp FROM %s WHERE path = %s",
+                $this->table,
+                $this->pdo->quote($newPathWithPrefix),
+                $this->table,
+                $this->pdo->quote($pathWithPrefix)
+            )
+        );
     }
 
     /**
@@ -248,7 +265,9 @@ class PDOAdapter extends AbstractAdapter
      */
     public function createDir($dirname, Config $config)
     {
-        $statement = $this->pdo->prepare("INSERT INTO {$this->table} (path, type, timestamp) VALUES(:path, :type, :timestamp)");
+        $statement = $this->pdo->prepare(
+            "INSERT INTO {$this->table} (path, type, timestamp) VALUES(:path, :type, :timestamp)"
+        );
 
         $timestamp = $config->get('timestamp', time());
 
@@ -283,7 +302,7 @@ class PDOAdapter extends AbstractAdapter
      *
      * @param string $path
      *
-     * @return PDOStatement|false
+     * @return \PDOStatement|false
      */
     public function readPrepare($path)
     {
@@ -295,6 +314,7 @@ class PDOAdapter extends AbstractAdapter
         if ($statement->execute()) {
             return $statement;
         }
+
         return false;
     }
 
@@ -304,12 +324,13 @@ class PDOAdapter extends AbstractAdapter
     public function read($path)
     {
         $statement = $this->readPrepare($path);
-        if ($statement and ($result = $statement->fetch(PDO::FETCH_ASSOC))) {
+        if ($statement && ($result = $statement->fetch(PDO::FETCH_ASSOC))) {
             if (is_resource($result['contents'])) {
-                // Some PDO drivers return a stream (as should be for LOB ?)
+                // Some PDO drivers return a stream (as should be for LOB)
                 // so we need to retrieve it entirely.
                 $result['contents'] = stream_get_contents($result['contents']);
             }
+
             return $result;
         }
 
@@ -321,16 +342,16 @@ class PDOAdapter extends AbstractAdapter
      */
     public function readStream($path)
     {
-        if (! ($statement = $this->readPrepare($path))) {
+        if (!($statement = $this->readPrepare($path))) {
             return false;
         }
 
         $statement->bindColumn(1, $stream, PDO::PARAM_LOB);
-        if (! $statement->fetch(PDO::FETCH_BOUND)) {
+        if (!$statement->fetch(PDO::FETCH_BOUND)) {
             return false;
         }
 
-        if (! is_resource($stream)) {
+        if (!is_resource($stream)) {
             // Some PDO drivers (MySQL, SQLite) don't return a stream, so we simulate one
             // see https://bugs.php.net/bug.php?id=40913
             $result = $stream;
@@ -358,7 +379,7 @@ class PDOAdapter extends AbstractAdapter
         $statement = $this->pdo->prepare($query);
 
         if ($useWhere) {
-            $pathPrefix = $this->applyPathPrefix($directory . '/') . '%';
+            $pathPrefix = $this->applyPathPrefix($directory.'/').'%';
             $statement->bindParam(':path_prefix', $pathPrefix, PDO::PARAM_STR);
             $directoryWithPrefix = $this->applyPathPrefix($directory);
             $statement->bindParam(':path', $directoryWithPrefix, PDO::PARAM_STR);
@@ -370,20 +391,23 @@ class PDOAdapter extends AbstractAdapter
 
         $result = $statement->fetchAll(PDO::FETCH_ASSOC);
 
-        $result = array_map(function ($v) {
-            $v['timestamp'] = (int)$v['timestamp'];
-            $v['size'] = (int)$v['size'];
-            $v['path'] = $this->removePathPrefix($v['path']);
-            $v['dirname'] = Util::dirname($v['path']);
+        $result = array_map(
+            function ($v) {
+                $v['timestamp'] = (int)$v['timestamp'];
+                $v['size'] = (int)$v['size'];
+                $v['path'] = $this->removePathPrefix($v['path']);
+                $v['dirname'] = Util::dirname($v['path']);
 
-            if ($v['type'] === 'dir') {
-                unset($v['mimetype']);
-                unset($v['size']);
-                unset($v['contents']);
-            }
+                if ($v['type'] === 'dir') {
+                    unset($v['mimetype']);
+                    unset($v['size']);
+                    unset($v['contents']);
+                }
 
-            return $v;
-        }, $result);
+                return $v;
+            },
+            $result
+        );
 
         return $recursive ? $result : Util::emulateDirectories($result);
     }
@@ -397,7 +421,9 @@ class PDOAdapter extends AbstractAdapter
      */
     public function getMetadata($path)
     {
-        $statement = $this->pdo->prepare("SELECT id, path, size, type, mimetype, timestamp FROM {$this->table} WHERE path=:path");
+        $statement = $this->pdo->prepare(
+            "SELECT id, path, size, type, mimetype, timestamp FROM {$this->table} WHERE path=:path"
+        );
 
         $pathWithPrefix = $this->applyPathPrefix($path);
         $statement->bindParam(':path', $pathWithPrefix, PDO::PARAM_STR);
